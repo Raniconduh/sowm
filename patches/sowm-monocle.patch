@@ -1,0 +1,65 @@
+diff --git a/config.def.h b/config.def.h
+index cae2009..39f5131 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -3,6 +3,9 @@
+ 
+ #define MOD Mod4Mask
+ 
++const int mono_vgap = 16;
++const int mono_hgap = 16;
++
+ const char* menu[]    = {"dmenu_run",      0};
+ const char* term[]    = {"st",             0};
+ const char* scrot[]   = {"scr",            0};
+@@ -17,6 +20,7 @@ static struct key keys[] = {
+     {MOD,      XK_q,   win_kill,   {0}},
+     {MOD,      XK_c,   win_center, {0}},
+     {MOD,      XK_f,   win_fs,     {0}},
++    {MOD,      XK_m,   win_fs_all, {0}},
+ 
+     {Mod1Mask,           XK_Tab, win_next,   {0}},
+     {Mod1Mask|ShiftMask, XK_Tab, win_prev,   {0}},
+diff --git a/sowm.c b/sowm.c
+index 96f8340..d293115 100644
+--- a/sowm.c
++++ b/sowm.c
+@@ -145,6 +145,26 @@ void win_fs(const Arg arg) {
+     }
+ }
+ 
++void win_fs_all(const Arg arg) {
++    int tmp = ws;
++    for (int i = 0; i < 10; i++) {
++        if (!ws_list[i]) continue;
++        ws_sel(i);
++        for win {
++            // resize fullscreen
++            if ((c->f = c->f ? 0 : 1)) {
++                win_size(c->w, &c->wx, &c->wy, &c->ww, &c->wh);
++                XMoveResizeWindow(d, c->w, mono_hgap, mono_vgap, sw - (mono_hgap * 2), sh - (mono_vgap * 2));
++            // resize previous
++            } else {
++                XMoveResizeWindow(d, c->w, c->wx, c->wy, c->ww, c->wh);
++            }
++        }
++    }
++    ws_sel(tmp);
++}
++
++
+ void win_to_ws(const Arg arg) {
+     int tmp = ws;
+ 
+diff --git a/sowm.h b/sowm.h
+index b059f06..3c14e20 100644
+--- a/sowm.h
++++ b/sowm.h
+@@ -48,6 +48,7 @@ void win_add(Window w);
+ void win_center(const Arg arg);
+ void win_del(Window w);
+ void win_fs(const Arg arg);
++void win_fs_all(const Arg arg);
+ void win_focus(client *c);
+ void win_kill(const Arg arg);
+ void win_prev(const Arg arg);

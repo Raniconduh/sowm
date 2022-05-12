@@ -1,0 +1,169 @@
+diff --git a/config.def.h b/config.def.h
+index cae2009..eda7af9 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -3,6 +3,10 @@
+ 
+ #define MOD Mod4Mask
+ 
++const int bar_height = 12;
++const int bar_fg = 0xFFFFFF;
++const int bar_bg = 0x0F0F0F;
++
+ const char* menu[]    = {"dmenu_run",      0};
+ const char* term[]    = {"st",             0};
+ const char* scrot[]   = {"scr",            0};
+diff --git a/sowm.c b/sowm.c
+index 96f8340..8ab07dc 100644
+--- a/sowm.c
++++ b/sowm.c
+@@ -6,7 +6,9 @@
+ #include <X11/XKBlib.h>
+ #include <stdlib.h>
+ #include <signal.h>
++#include <string.h>
+ #include <unistd.h>
++#include <stdio.h>
+ 
+ #include "sowm.h"
+ 
+@@ -18,6 +20,13 @@ static Display      *d;
+ static XButtonEvent mouse;
+ static Window       root;
+ 
++struct {
++    Window w;
++    GC gc;
++    int fh;
++    int wh;
++} bar;
++
+ static void (*events[LASTEvent])(XEvent *e) = {
+     [ButtonPress]      = button_press,
+     [ButtonRelease]    = button_release,
+@@ -27,11 +36,38 @@ static void (*events[LASTEvent])(XEvent *e) = {
+     [MappingNotify]    = mapping_notify,
+     [DestroyNotify]    = notify_destroy,
+     [EnterNotify]      = notify_enter,
+-    [MotionNotify]     = notify_motion
++    [MotionNotify]     = notify_motion,
++    [PropertyNotify]   = notify_property
+ };
+ 
+ #include "config.h"
+ 
++static void write_bar(void) {
++    XClearWindow(d, bar.w);
++
++    // write workspace line & current ws
++    XMapWindow(d, bar.w);
++    char stmp[128];
++    char s[128];
++
++    sprintf(s, "%2d |", ws);
++    for (unsigned int i = 0; i < sizeof(ws_list) / sizeof(ws_list[0]); i++) {
++        if (ws_list[i]) {
++            sprintf(stmp, " %2d", i);
++            strcat(s, stmp);
++        }
++    }
++
++    XDrawString(d, bar.w, bar.gc, 1, (bar.fh + bar.wh) / 2 - 2, s, strlen(s));
++
++    // write X root window name
++    char * txt;
++    if (!XFetchName(d, root, &txt)) return;
++    int tlen = strlen(txt);
++    XDrawString(d, bar.w, bar.gc, (sw / 2) - (tlen * 5 / 2), (bar.fh + bar.wh) / 2 - 2, txt, tlen);
++    XFree(txt);
++}
++
+ void win_focus(client *c) {
+     cur = c;
+     XSetInputFocus(d, cur->w, RevertToParent, CurrentTime);
+@@ -64,6 +100,10 @@ void notify_motion(XEvent *e) {
+         MAX(1, wh + (mouse.button == 3 ? yd : 0)));
+ }
+ 
++void notify_property(XEvent *e) {
++    write_bar();
++}
++
+ void key_press(XEvent *e) {
+     KeySym keysym = XkbKeycodeToKeysym(d, e->xkey.keycode, 0, 0);
+ 
+@@ -105,6 +145,8 @@ void win_add(Window w) {
+     }
+ 
+     ws_save(ws);
++
++    write_bar();
+ }
+ 
+ void win_del(Window w) {
+@@ -120,6 +162,8 @@ void win_del(Window w) {
+ 
+     free(x);
+     ws_save(ws);
++
++    write_bar();
+ }
+ 
+ void win_kill(const Arg arg) {
+@@ -130,7 +174,7 @@ void win_center(const Arg arg) {
+     if (!cur) return;
+ 
+     win_size(cur->w, &(int){0}, &(int){0}, &ww, &wh);
+-    XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2);
++    XMoveWindow(d, cur->w, (sw - ww) / 2, (sh - wh) / 2 + bar.wh);
+ }
+ 
+ void win_fs(const Arg arg) {
+@@ -193,6 +237,8 @@ void ws_go(const Arg arg) {
+     ws_sel(arg.i);
+ 
+     if (list) win_focus(list); else cur = 0;
++
++    write_bar();
+ }
+ 
+ void configure_request(XEvent *e) {
+@@ -280,10 +326,25 @@ int main(void) {
+     sw    = XDisplayWidth(d, s);
+     sh    = XDisplayHeight(d, s);
+ 
+-    XSelectInput(d,  root, SubstructureRedirectMask);
++    XSelectInput(d,  root, SubstructureRedirectMask | PropertyChangeMask);
+     XDefineCursor(d, root, XCreateFontCursor(d, 68));
+     input_grab(root);
+ 
++    bar.wh = bar_height;
++    bar.w = XCreateSimpleWindow(d, root, 0, 0, sw, bar.wh, 0, 0xFFFFFF, 0x0F0F0F);
++
++    XSelectInput(d, bar.w, ExposureMask);
++    XMapWindow(d, bar.w);
++    XFontStruct * finfo = XLoadQueryFont(d, "fixed");
++
++    bar.fh = finfo->ascent + finfo->descent;
++    bar.gc = XCreateGC(d, bar.w, 0, 0);
++
++    XSetFont(d, bar.gc, finfo->fid);
++    XSetForeground(d, bar.gc, 0xFFFFFF);
++
++    write_bar();
++
+     while (1 && !XNextEvent(d, &ev)) // 1 && will forever be here.
+         if (events[ev.type]) events[ev.type](&ev);
+ }
+diff --git a/sowm.h b/sowm.h
+index b059f06..e00ae03 100644
+--- a/sowm.h
++++ b/sowm.h
+@@ -43,6 +43,7 @@ void mapping_notify(XEvent *e);
+ void notify_destroy(XEvent *e);
+ void notify_enter(XEvent *e);
+ void notify_motion(XEvent *e);
++void notify_property(XEvent *e);
+ void run(const Arg arg);
+ void win_add(Window w);
+ void win_center(const Arg arg);

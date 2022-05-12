@@ -1,0 +1,34 @@
+diff --git a/sowm.c b/sowm.c
+index 96f8340..e09bd39 100644
+--- a/sowm.c
++++ b/sowm.c
+@@ -195,6 +195,18 @@ void ws_go(const Arg arg) {
+     if (list) win_focus(list); else cur = 0;
+ }
+ 
++void quit(const Arg arg) {
++	(void)arg;
++
++	for (int i = 0; i < 10; i++) {
++		ws_sel(i);
++		for win XKillClient(d, c->w);
++	}
++
++	XSync(d, False);
++	exit(0);
++}
++
+ void configure_request(XEvent *e) {
+     XConfigureRequestEvent *ev = &e->xconfigurerequest;
+ 
+diff --git a/sowm.h b/sowm.h
+index b059f06..4899fce 100644
+--- a/sowm.h
++++ b/sowm.h
+@@ -54,5 +54,6 @@ void win_prev(const Arg arg);
+ void win_next(const Arg arg);
+ void win_to_ws(const Arg arg);
+ void ws_go(const Arg arg);
++void quit(const Arg arg);
+ 
+ static int xerror() { return 0; }
